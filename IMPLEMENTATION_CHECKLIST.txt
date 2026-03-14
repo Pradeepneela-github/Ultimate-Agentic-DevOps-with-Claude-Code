@@ -1,0 +1,639 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║        AWS COST OPTIMIZATION - IMPLEMENTATION CHECKLIST                     ║
+║                                                                              ║
+║  Project: portfolio-site (S3 + CloudFront)                                  ║
+║  Date: 2026-03-11                                                           ║
+║  Estimated Savings: $12.70-48/month (40-60% reduction)                      ║
+║  Implementation Time: ~50 minutes                                           ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+════════════════════════════════════════════════════════════════════════════
+PHASE 1: CORE CHANGES (15 minutes) - DO THESE FIRST
+════════════════════════════════════════════════════════════════════════════
+
+PRE-IMPLEMENTATION
+──────────────────
+☐ Read COST_QUICK_REFERENCE.md (5 minutes)
+☐ Read IMPLEMENTATION_GUIDE.md Phase 1 section (5 minutes)
+☐ Ensure git is clean: git status (should show nothing or only modified files)
+☐ Create backup branch: git checkout -b cost-optimization-backup
+☐ Switch back to main: git checkout main
+
+
+STEP 1.1: Backup Current Configuration
+────────────────────────────────────────
+☐ cd /Users/pradneelz/DMI_Cohort_2/Week-9/Ultimate-Agentic-DevOps-with-Claude-Code/
+☐ git add -A
+☐ git commit -m "backup: current terraform config before cost optimization"
+☐ Confirm commit created: git log --oneline | head -1
+
+
+STEP 1.2: Update CloudFront Price Class
+────────────────────────────────────────
+File: terraform/main.tf
+Line: 73
+
+Current line:
+  price_class         = "PriceClass_200"
+
+Change to:
+  price_class         = "PriceClass_100"
+
+☐ Open terraform/main.tf in editor
+☐ Find line 73 (search for "PriceClass_200")
+☐ Change value from "PriceClass_200" to "PriceClass_100"
+☐ Save file
+☐ Verify change: grep "price_class" terraform/main.tf
+
+
+STEP 1.3: Disable S3 Versioning
+────────────────────────────────
+File: terraform/main.tf
+Lines: 20-22
+
+Current:
+  versioning_configuration {
+    status = "Enabled"
+  }
+
+Change to:
+  versioning_configuration {
+    status = "Suspended"
+  }
+
+☐ Open terraform/main.tf in editor
+☐ Find "versioning_configuration" block
+☐ Change "Enabled" to "Suspended"
+☐ Save file
+☐ Verify change: grep -A 2 "versioning_configuration" terraform/main.tf
+
+
+STEP 1.4: Increase CloudFront Cache TTL
+────────────────────────────────────────
+File: terraform/main.tf
+Lines: 96-98
+
+Current:
+  min_ttl                = 0
+  default_ttl            = 3600
+  max_ttl                = 86400
+
+Change to:
+  min_ttl                = 0
+  default_ttl            = 604800
+  max_ttl                = 2592000
+
+☐ Open terraform/main.tf in editor
+☐ Find "default_cache_behavior" block
+☐ Change default_ttl from 3600 to 604800
+☐ Change max_ttl from 86400 to 2592000
+☐ Save file
+☐ Verify changes:
+  grep "min_ttl\|default_ttl\|max_ttl" terraform/main.tf
+
+
+STEP 1.5: Review Changes
+────────────────────────
+☐ cd terraform/
+☐ terraform plan
+
+Expected output should show:
+  - aws_s3_bucket_versioning.website (will be updated)
+  - aws_cloudfront_distribution.website (will be updated)
+  - Plan: 0 to add, 2 to change, 0 to destroy
+
+☐ Review the plan output carefully
+☐ Confirm price_class change is shown
+☐ Confirm versioning status change is shown
+☐ Confirm default_ttl change is shown (3600 → 604800)
+☐ Confirm max_ttl change is shown (86400 → 2592000)
+
+
+STEP 1.6: Apply Changes
+───────────────────────
+☐ terraform apply
+
+Expected output:
+  Apply complete! Resources: 0 added, 2 changed, 0 destroyed.
+
+Wait for deployment (typically 1-3 minutes for CloudFront to update)
+
+☐ Confirm output shows "Apply complete!"
+☐ Wait 3-5 minutes for CloudFront to propagate changes
+
+
+STEP 1.7: Commit Changes
+────────────────────────
+☐ cd /Users/pradneelz/DMI_Cohort_2/Week-9/Ultimate-Agentic-DevOps-with-Claude-Code/
+☐ git add terraform/main.tf
+☐ git commit -m "cost: optimize CloudFront price class, S3 versioning, and cache TTL"
+☐ Verify: git log --oneline | head -1
+
+
+STEP 1.8: Quick Validation
+──────────────────────────
+
+Get your CloudFront domain:
+☐ aws cloudfront list-distributions \
+    --query "DistributionList.Items[?Comment=='portfolio-site'].DomainName" \
+    --output text
+  Store this as: $DOMAIN = "<output>"
+
+Test website loads:
+☐ curl -I https://$DOMAIN/
+  Expected: HTTP/2 200
+
+Test cache headers:
+☐ curl -I https://$DOMAIN/ | grep -i cache-control
+  Expected: Cache-Control: max-age=604800
+
+☐ Website loads successfully
+☐ Cache headers show 7-day TTL (max-age=604800)
+
+
+PHASE 1 COMPLETE!
+─────────────────
+Estimated savings: $12-33/month
+Time elapsed: ~15 minutes
+Status: READY FOR PHASE 2
+
+════════════════════════════════════════════════════════════════════════════
+PHASE 2: POLISH (20 minutes) - RECOMMENDED NEXT
+════════════════════════════════════════════════════════════════════════════
+
+STEP 2.1: Review IMPLEMENTATION_GUIDE.md Phase 2
+─────────────────────────────────────────────────
+☐ Read IMPLEMENTATION_GUIDE.md Phase 2 section
+☐ Understand error response changes
+☐ Understand lifecycle rule purpose
+
+
+STEP 2.2: Create /404.html Error Page
+───────────────────────────────────────
+File: (website root)/404.html (or alongside index.html)
+
+☐ Create new file at your website root: 404.html
+☐ Copy HTML content from IMPLEMENTATION_GUIDE.md or TERRAFORM_CHANGES.md
+☐ Ensure file is in same directory as index.html
+☐ Verify file exists: ls -la 404.html
+☐ Open in browser locally to test appearance
+
+
+STEP 2.3: Update Error Response Configuration
+──────────────────────────────────────────────
+File: terraform/main.tf
+Lines: 101-106
+
+Current:
+  custom_error_response {
+    error_code            = 404
+    response_code         = 200
+    response_page_path    = "/index.html"
+    error_caching_min_ttl = 0
+  }
+
+Change to:
+  custom_error_response {
+    error_code            = 404
+    response_code         = 404
+    response_page_path    = "/404.html"
+    error_caching_min_ttl = 300
+  }
+
+☐ Open terraform/main.tf in editor
+☐ Find custom_error_response block
+☐ Change response_code from 200 to 404
+☐ Change response_page_path from "/index.html" to "/404.html"
+☐ Change error_caching_min_ttl from 0 to 300
+☐ Save file
+
+
+STEP 2.4: Add S3 Lifecycle Rules
+─────────────────────────────────
+File: terraform/main.tf
+Location: After aws_s3_bucket_versioning resource (after line 23)
+
+Add new resource:
+
+resource "aws_s3_bucket_lifecycle_configuration" "website" {
+  bucket = aws_s3_bucket.website.id
+
+  rule {
+    id     = "delete-old-versions"
+    status = "Enabled"
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+}
+
+☐ Open terraform/main.tf in editor
+☐ Navigate to after aws_s3_bucket_versioning block (after line 23)
+☐ Add blank line
+☐ Add the complete lifecycle_configuration resource above
+☐ Save file
+☐ Verify syntax: terraform validate
+
+
+STEP 2.5: Review Changes
+────────────────────────
+☐ cd terraform/
+☐ terraform plan
+
+Expected output should show:
+  - aws_s3_bucket_lifecycle_configuration.website (will be created)
+  - aws_cloudfront_distribution.website (will be updated for error response)
+  - Plan: 1 to add, 1 to change, 0 to destroy
+
+☐ Review the plan output
+☐ Confirm lifecycle rule is being added
+☐ Confirm error response changes are shown
+☐ Confirm response_code change: 200 → 404
+☐ Confirm response_page_path: "/index.html" → "/404.html"
+☐ Confirm error_caching_min_ttl: 0 → 300
+
+
+STEP 2.6: Apply Changes
+───────────────────────
+☐ terraform apply
+
+Expected output:
+  Apply complete! Resources: 1 added, 1 changed, 0 destroyed.
+
+☐ Confirm output shows "Apply complete!"
+☐ Wait 3-5 minutes for CloudFront propagation
+
+
+STEP 2.7: Deploy Website Files (Including 404.html)
+─────────────────────────────────────────────────────
+
+Get your S3 bucket name:
+☐ BUCKET=$(aws s3 ls | grep portfolio-site | awk '{print $3}')
+☐ echo $BUCKET  (should show: portfolio-site-production-<ACCOUNT_ID>)
+
+Deploy files to S3:
+☐ aws s3 sync ./ s3://$BUCKET/ \
+    --exclude "terraform/*" \
+    --exclude ".git/*" \
+    --exclude "*.md" \
+    --exclude ".DS_Store"
+
+☐ Sync completed successfully
+☐ Files deployed to S3
+☐ 404.html is included in deployment
+
+
+STEP 2.8: Verify 404 Page Works
+────────────────────────────────
+
+Get CloudFront domain:
+☐ DOMAIN=$(aws cloudfront list-distributions \
+    --query "DistributionList.Items[?Comment=='portfolio-site'].DomainName" \
+    --output text)
+☐ echo $DOMAIN
+
+Test 404 response:
+☐ curl -I https://$DOMAIN/nonexistent.html
+
+Expected headers:
+  HTTP/2 404 Not Found
+  Cache-Control: max-age=300
+
+☐ Response shows HTTP 404 (not 200)
+☐ Cache-Control shows max-age=300 (not 0)
+☐ 404.html page displays correctly
+
+
+STEP 2.9: Commit Changes
+────────────────────────
+☐ cd /Users/pradneelz/DMI_Cohort_2/Week-9/Ultimate-Agentic-DevOps-with-Claude-Code/
+☐ git add terraform/main.tf
+☐ git add 404.html (or path to 404.html file)
+☐ git commit -m "cost: fix error responses and add lifecycle rules"
+☐ git log --oneline | head -1
+
+
+STEP 2.10: Extended Validation
+──────────────────────────────
+☐ curl -I https://$DOMAIN/index.html | grep -i cache
+  Expected: Cache-Control: max-age=604800
+
+☐ curl -I https://$DOMAIN/style.css | grep -i cache
+  Expected: Cache-Control: max-age=604800
+
+☐ curl -I https://$DOMAIN/missing.html | grep HTTP
+  Expected: HTTP/2 404
+
+☐ curl -I https://$DOMAIN/missing.css | grep HTTP
+  Expected: HTTP/2 404
+
+☐ Website home page loads: https://$DOMAIN/
+☐ All CSS/images load correctly
+☐ Error pages show user-friendly 404 message
+
+
+PHASE 2 COMPLETE!
+─────────────────
+Additional savings: $0.50-2/month
+Total savings so far: $12.50-35/month
+Time elapsed: ~20 minutes
+Status: READY FOR PHASE 3 (OPTIONAL)
+
+════════════════════════════════════════════════════════════════════════════
+PHASE 3: OPTIONAL ENHANCEMENTS (10 minutes)
+════════════════════════════════════════════════════════════════════════════
+
+STEP 3.1: Update HTTP Protocol (OPTIONAL)
+──────────────────────────────────────────
+File: terraform/main.tf
+Line: 83
+
+Current:
+  http_version        = "http2and3"
+
+Change to (OPTIONAL):
+  http_version        = "http2"
+
+Note: This change is optional. HTTP/2 is sufficient; HTTP/3 support
+      adds negligible cost but is forward-compatible.
+
+Recommendation: SKIP THIS STEP (keep http2and3 for compatibility)
+
+If you want to implement:
+☐ Open terraform/main.tf
+☐ Find http_version line
+☐ Change value from "http2and3" to "http2"
+☐ Save file
+☐ terraform plan
+☐ terraform apply
+
+
+STEP 3.2: Monitor CloudFront Metrics (OPTIONAL)
+────────────────────────────────────────────────
+Check after 24-48 hours:
+
+☐ AWS CloudFront Console → Your Distribution → Metrics
+☐ Check "Cache Statistics"
+  Expected: Cache Hit Ratio > 95% (was ~80%)
+
+☐ Check "Requests"
+  Expected: Origin requests decreased significantly
+
+☐ Check "Data Transferred"
+  Expected: Origin transfer decreased
+
+☐ No error spikes
+☐ Metrics look healthy
+
+
+PHASE 3 COMPLETE!
+─────────────────
+Minimal additional savings: $0-0.10/month
+Total savings: $12.70-35+/month
+Overall time: ~50 minutes
+Status: COMPLETE
+
+════════════════════════════════════════════════════════════════════════════
+POST-IMPLEMENTATION VALIDATION (Done Anytime)
+════════════════════════════════════════════════════════════════════════════
+
+IMMEDIATE CHECKS (Within 1 hour)
+────────────────────────────────
+☐ Website loads at CloudFront domain
+☐ All pages render correctly
+☐ CSS and images load properly
+☐ Links work correctly
+☐ No HTTP errors in browser console
+☐ Mobile view works correctly
+
+TECHNICAL CHECKS (Within 1 hour)
+────────────────────────────────
+☐ terraform state looks good: terraform show
+☐ CloudFront distribution is enabled (AWS Console)
+☐ S3 bucket is not publicly accessible (AWS Console)
+☐ Distribution status shows "Deployed" or "In Progress"
+
+CACHE BEHAVIOR CHECKS (Within 24 hours)
+───────────────────────────────────────
+☐ First request is slower (cache miss)
+☐ Subsequent requests are fast (cache hit)
+☐ Cache headers show correct TTL:
+  curl -I https://$DOMAIN/ | grep Cache-Control
+☐ Cache-Control shows: max-age=604800
+
+ERROR PAGE CHECKS
+─────────────────
+☐ Visit non-existent URL: https://$DOMAIN/nonexistent.html
+☐ Returns HTTP 404 status (check curl or browser dev tools)
+☐ Displays custom 404.html page (not generic CloudFront error)
+☐ 404 page is user-friendly (styled, has home link)
+
+METRICS CHECKS (After 24 hours)
+───────────────────────────────
+☐ CloudFront Console → Metrics → Cache Statistics
+☐ Cache Hit Ratio increased (should be 95%+)
+☐ Origin Requests decreased significantly
+☐ Data Transferred graph shows pattern
+
+COST CHECKS (After 30 days)
+───────────────────────────
+☐ AWS Billing Dashboard → Bill details → CloudFront
+☐ Data Transfer costs decreased
+☐ AWS Billing Dashboard → Bill details → S3
+☐ S3 request costs decreased significantly
+☐ S3 storage costs same or decreased
+☐ Total bill is ~40-60% lower than previous month
+
+════════════════════════════════════════════════════════════════════════════
+TROUBLESHOOTING
+════════════════════════════════════════════════════════════════════════════
+
+Issue: "terraform plan" shows unexpected changes
+──────────────────────────────────────────────────
+Possible causes:
+  ☐ File wasn't saved after editing
+  ☐ Wrong line number
+  ☐ Indentation issue
+  ☐ Extra spaces or formatting
+
+Solution:
+  ☐ Re-read the section carefully
+  ☐ Compare with TERRAFORM_CHANGES.md
+  ☐ Check file with: grep "price_class\|default_ttl\|status" terraform/main.tf
+  ☐ Manually verify each change matches the documentation
+
+
+Issue: "Website returns 404 for everything after update"
+─────────────────────────────────────────────────────────
+Possible causes:
+  ☐ CloudFront cache still serving old error response config
+  ☐ Invalidation needed
+
+Solution:
+  ☐ Create CloudFront invalidation:
+    aws cloudfront create-invalidation --distribution-id $DIST_ID --paths "/*"
+  ☐ Wait 2-3 minutes
+  ☐ Try again
+
+
+Issue: "Cache headers still show old TTL"
+──────────────────────────────────────────
+Possible causes:
+  ☐ CloudFront hasn't propagated changes yet
+  ☐ Browser is serving cached response
+
+Solution:
+  ☐ Wait 5-10 minutes
+  ☐ Use curl to test (not browser): curl -I https://domain/
+  ☐ If still wrong, check terraform state: terraform show
+
+
+Issue: "404.html returns 403 Forbidden"
+────────────────────────────────────────
+Possible causes:
+  ☐ File wasn't uploaded to S3
+  ☐ File permissions issue
+  ☐ S3 path incorrect
+
+Solution:
+  ☐ Verify file exists: aws s3 ls s3://$BUCKET/ | grep 404.html
+  ☐ If missing, upload: aws s3 cp 404.html s3://$BUCKET/
+  ☐ Verify public access is blocked (correct)
+  ☐ CloudFront should serve it (check distribution configuration)
+
+
+Issue: "terraform apply fails with error"
+──────────────────────────────────────────
+Possible causes:
+  ☐ Syntax error in terraform file
+  ☐ Invalid configuration
+
+Solution:
+  ☐ Run: terraform validate
+  ☐ Check output for errors
+  ☐ Fix errors based on validation output
+  ☐ Compare your file with OPTIMIZED_main.tf
+
+
+Issue: "Not seeing cost savings after changes"
+───────────────────────────────────────────────
+Possible causes:
+  ☐ Changes just deployed (takes 30 days for full month impact)
+  ☐ Low traffic (savings harder to see)
+  ☐ Changes not fully applied
+
+Solution:
+  ☐ Wait 30 days for full billing cycle
+  ☐ Check CloudFront metrics (not just dollar costs)
+  ☐ Verify cache hit ratio increased
+  ☐ Verify origin requests decreased
+  ☐ Verify terraform state matches changes: terraform show
+
+
+ROLLBACK INSTRUCTIONS
+─────────────────────
+If you need to revert all changes:
+
+☐ git log --oneline | head -10
+  (Find your backup commit before changes)
+
+☐ git checkout <COMMIT_HASH> -- terraform/main.tf
+  (Revert to previous version)
+
+☐ terraform plan
+  (Review what will change)
+
+☐ terraform apply
+  (Revert infrastructure)
+
+☐ git revert HEAD
+  (Create revert commit)
+
+Changes will propagate in ~3 minutes. No downtime.
+
+════════════════════════════════════════════════════════════════════════════
+FINAL CHECKLIST
+════════════════════════════════════════════════════════════════════════════
+
+Before considering this complete:
+
+Pre-Implementation
+☐ Read documentation (20 min)
+☐ Backup configuration (git commit)
+☐ Review terraform plan (don't skip!)
+
+Phase 1 Implementation
+☐ Change price_class (2 min)
+☐ Change versioning status (2 min)
+☐ Change TTL values (2 min)
+☐ Apply terraform (6 min)
+☐ Validate changes (3 min)
+☐ Commit to git (1 min)
+
+Phase 2 Implementation
+☐ Create 404.html (5 min)
+☐ Update error response (2 min)
+☐ Add lifecycle rules (5 min)
+☐ Apply terraform (3 min)
+☐ Deploy website files (2 min)
+☐ Validate error pages (2 min)
+☐ Commit to git (1 min)
+
+Phase 3 (Optional)
+☐ Decide to skip or implement (2 min)
+☐ If implementing: apply changes (5 min)
+
+Post-Implementation
+☐ Verify website works (5 min)
+☐ Test cache headers (2 min)
+☐ Test error pages (2 min)
+☐ Check CloudFront metrics (3 min)
+☐ Document completion (2 min)
+
+TOTAL TIME: ~45-60 minutes for full implementation
+TOTAL SAVINGS: $12.70-35+/month
+RISK LEVEL: LOW (all reversible)
+
+
+════════════════════════════════════════════════════════════════════════════
+SIGN-OFF
+════════════════════════════════════════════════════════════════════════════
+
+Implementation Date: _______________
+
+Phase 1 Completed: ☐ Yes  ☐ No
+Phase 2 Completed: ☐ Yes  ☐ No
+Phase 3 Completed: ☐ Yes  ☐ No
+
+All Validations Passed: ☐ Yes  ☐ No
+
+Initial Cost Savings Estimate: $ _____ / month
+
+Approved by: _________________________ Date: _____________
+
+════════════════════════════════════════════════════════════════════════════
+                            IMPLEMENTATION COMPLETE!
+════════════════════════════════════════════════════════════════════════════
+
+Next steps:
+1. Monitor CloudFront metrics daily for next 7 days
+2. Check AWS billing after 30 days to confirm savings
+3. Review quarterly to ensure cost optimizations remain in place
+4. Consider these optimizations when scaling infrastructure
+
+Estimated cost reduction: 40-60% ($12.70-48/month depending on traffic)
+Estimated time to payback: Less than 1 month
+Risk level: LOW (easily reversible with git)
+
+Questions? Review:
+  - COST_QUICK_REFERENCE.md
+  - IMPLEMENTATION_GUIDE.md
+  - TERRAFORM_CHANGES.md
+  - COST_OPTIMIZATION_REPORT.md
+
+════════════════════════════════════════════════════════════════════════════
